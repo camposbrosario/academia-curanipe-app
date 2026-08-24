@@ -17,7 +17,7 @@ import {
   getDoc,
 } from "firebase/firestore";
 
-const CATEGORIAS = ["Sub-8", "Sub-10", "Sub-12", "Sub-16", "Sub-16 Fem", "Honor"];
+const CATEGORIAS = ["Sub-6", "Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16", "Sub-16 Fem", "Honor", "Honor Fem"];
 
 // Roles que existen: "admin", "tesorera", "profesor", "sin-rol"
 // Qué pestañas ve cada rol:
