@@ -310,18 +310,46 @@ function Asistencia() {
     setPresentes((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
+  const [editingId, setEditingId] = useState(null);
+
   async function guardar() {
     if (!profesor.trim()) { setMsg("Falta el nombre del profesor a cargo."); return; }
     setMsg("");
     const listaPresentes = catPlayers.filter((p) => presentes[p.id]).map((p) => p.id);
-    await addDoc(collection(db, "asistencia"), {
+    const datos = {
       categoria, fecha, lugar, hora, tipo, profesor,
       presentes: listaPresentes,
       totalJugadoras: catPlayers.length,
-      creadoEn: new Date().toISOString(),
-    });
-    setMsg("Sesión guardada correctamente.");
+    };
+    if (editingId) {
+      await updateDoc(doc(db, "asistencia", editingId), datos);
+      setEditingId(null);
+      setMsg("Sesión actualizada correctamente.");
+    } else {
+      await addDoc(collection(db, "asistencia"), { ...datos, creadoEn: new Date().toISOString() });
+      setMsg("Sesión guardada correctamente.");
+    }
     setPresentes({});
+  }
+
+  function editarSesion(s) {
+    setEditingId(s.id);
+    setCategoria(s.categoria);
+    setFecha(s.fecha);
+    setLugar(s.lugar || "");
+    setHora(s.hora || "");
+    setTipo(s.tipo);
+    setProfesor(s.profesor || "");
+    const marcadas = {};
+    (s.presentes || []).forEach((id) => (marcadas[id] = true));
+    setPresentes(marcadas);
+    setMsg("Editando sesión del " + s.fecha + " — corrige lo que necesites y aprieta Guardar.");
+  }
+
+  function cancelarEdicion() {
+    setEditingId(null);
+    setPresentes({});
+    setMsg("");
   }
 
   async function eliminarSesion(id) {
@@ -365,7 +393,8 @@ function Asistencia() {
             {p.nombre} {p.apellido}
           </label>
         ))}
-        <button className="primary" style={{ marginTop: 10 }} onClick={guardar}>Guardar asistencia</button>
+        <button className="primary" style={{ marginTop: 10 }} onClick={guardar}>{editingId ? "Guardar cambios" : "Guardar asistencia"}</button>
+        {editingId && <button className="secondary" style={{ marginTop: 10, marginLeft: 8 }} onClick={cancelarEdicion}>Cancelar edición</button>}
       </div>
 
       <div className="card">
@@ -377,7 +406,10 @@ function Asistencia() {
               <b>{s.fecha}</b> · {s.tipo} {s.lugar && `· ${s.lugar}`} {s.hora && `· ${s.hora}`}
               <div className="muted">Profesor: {s.profesor} · {s.presentes?.length || 0}/{s.totalJugadoras} presentes</div>
             </div>
-            <button className="secondary" onClick={() => eliminarSesion(s.id)}>Eliminar</button>
+            <div>
+              <button className="secondary" onClick={() => editarSesion(s)}>Editar</button>{" "}
+              <button className="secondary" onClick={() => eliminarSesion(s.id)}>Eliminar</button>
+            </div>
           </div>
         ))}
       </div>
