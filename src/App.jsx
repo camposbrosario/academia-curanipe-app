@@ -324,6 +324,10 @@ function Asistencia() {
     setPresentes({});
   }
 
+  async function eliminarSesion(id) {
+    await deleteDoc(doc(db, "asistencia", id));
+  }
+
   const sesionesCategoria = sesiones
     .filter((s) => s.categoria === categoria)
     .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
@@ -373,6 +377,7 @@ function Asistencia() {
               <b>{s.fecha}</b> · {s.tipo} {s.lugar && `· ${s.lugar}`} {s.hora && `· ${s.hora}`}
               <div className="muted">Profesor: {s.profesor} · {s.presentes?.length || 0}/{s.totalJugadoras} presentes</div>
             </div>
+            <button className="secondary" onClick={() => eliminarSesion(s.id)}>Eliminar</button>
           </div>
         ))}
       </div>
