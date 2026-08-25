@@ -22,8 +22,8 @@ const CATEGORIAS = ["Sub-6", "Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16", "S
 // Roles que existen: "admin", "tesorera", "profesor", "sin-rol"
 // Qué pestañas ve cada rol:
 const TABS_BY_ROLE = {
-  admin: ["fichas", "asistencia", "caja"],
-  tesorera: ["fichas", "asistencia", "caja"],
+  admin: ["fichas", "asistencia", "profesores", "caja"],
+  tesorera: ["fichas", "asistencia", "profesores", "caja"],
   profesor: ["fichas", "asistencia"],
   "sin-rol": [],
 };
@@ -114,7 +114,7 @@ function Login() {
 function Dashboard({ user, role }) {
   const tabsDisponibles = TABS_BY_ROLE[role] || [];
   const [tab, setTab] = useState(tabsDisponibles[0] || "fichas");
-  const labels = { fichas: "Fichas", asistencia: "Asistencia", caja: "Caja general" };
+  const labels = { fichas: "Fichas", asistencia: "Asistencia", profesores: "Profesores", caja: "Caja general" };
 
   return (
     <div>
@@ -130,6 +130,7 @@ function Dashboard({ user, role }) {
       <div className="main">
         {tab === "fichas" && <Fichas />}
         {tab === "asistencia" && <Asistencia />}
+        {tab === "profesores" && <Profesores />}
         {tab === "caja" && <Caja />}
       </div>
     </div>
@@ -371,6 +372,86 @@ function Asistencia() {
             <div>
               <b>{s.fecha}</b> · {s.tipo} {s.lugar && `· ${s.lugar}`} {s.hora && `· ${s.hora}`}
               <div className="muted">Profesor: {s.profesor} · {s.presentes?.length || 0}/{s.totalJugadoras} presentes</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function emptyProfesorForm() {
+  return { nombre: "", telefono: "", categorias: [] };
+}
+
+function Profesores() {
+  const [profes, setProfes] = useState([]);
+  const [form, setForm] = useState(emptyProfesorForm());
+  const [editingId, setEditingId] = useState(null);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "profesores"), (snap) => {
+      setProfes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  function toggleCategoria(c) {
+    setForm((f) => ({
+      ...f,
+      categorias: f.categorias.includes(c) ? f.categorias.filter((x) => x !== c) : [...f.categorias, c],
+    }));
+  }
+
+  async function submit() {
+    if (!form.nombre.trim()) { setMsg("Falta el nombre del profesor/a."); return; }
+    setMsg("");
+    if (editingId) {
+      await updateDoc(doc(db, "profesores", editingId), form);
+      setEditingId(null);
+    } else {
+      await addDoc(collection(db, "profesores"), form);
+    }
+    setForm(emptyProfesorForm());
+  }
+  function edit(p) { setForm({ ...emptyProfesorForm(), ...p }); setEditingId(p.id); }
+  async function remove(id) { await deleteDoc(doc(db, "profesores", id)); }
+
+  return (
+    <div>
+      <div className="card">
+        {msg && <div className="error">{msg}</div>}
+        <div className="row">
+          <input placeholder="Nombre completo" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />
+          <input placeholder="Teléfono (56912345678)" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} />
+        </div>
+        <div className="muted" style={{ margin: "10px 0 4px" }}>Categorías en las que hace clases:</div>
+        <div className="row">
+          {CATEGORIAS.map((c) => (
+            <label key={c} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input type="checkbox" checked={form.categorias.includes(c)} onChange={() => toggleCategoria(c)} />
+              {c}
+            </label>
+          ))}
+        </div>
+        <div className="row" style={{ marginTop: 10 }}>
+          <button className="primary" onClick={submit}>{editingId ? "Guardar cambios" : "Agregar profesor/a"}</button>
+          {editingId && <button className="secondary" onClick={() => { setEditingId(null); setForm(emptyProfesorForm()); }}>Cancelar</button>}
+        </div>
+      </div>
+
+      <div className="card">
+        {profes.length === 0 && <div className="muted">No hay profesores registrados.</div>}
+        {profes.map((p) => (
+          <div key={p.id} className="list-item">
+            <div>
+              <b>{p.nombre}</b> {p.telefono && <span className="muted">— {p.telefono}</span>}
+              <div className="muted">{(p.categorias || []).join(", ") || "Sin categorías asignadas"}</div>
+            </div>
+            <div>
+              <button className="secondary" onClick={() => edit(p)}>Editar</button>{" "}
+              <button className="secondary" onClick={() => remove(p.id)}>Eliminar</button>
             </div>
           </div>
         ))}
