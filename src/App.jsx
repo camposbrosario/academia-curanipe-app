@@ -299,6 +299,7 @@ function Convocatorias() {
   const [lugar, setLugar] = useState("");
   const [hora, setHora] = useState("");
   const [tipo, setTipo] = useState("Entrenamiento");
+  const [rival, setRival] = useState("");
   const [convId, setConvId] = useState(null);
   const [respuestas, setRespuestas] = useState({});
 
@@ -322,16 +323,18 @@ function Convocatorias() {
       setLugar(convExistente.lugar || "");
       setHora(convExistente.hora || "");
       setTipo(convExistente.tipo || "Entrenamiento");
+      setRival(convExistente.rival || "");
       setRespuestas(convExistente.respuestas || {});
     } else {
       setConvId(null);
+      setRival("");
       setRespuestas({});
     }
     // eslint-disable-next-line
   }, [key]);
 
   async function crearOActualizar() {
-    const datos = { categoria, fecha, lugar, hora, tipo, respuestas };
+    const datos = { categoria, fecha, lugar, hora, tipo, rival, respuestas };
     if (convId) {
       await updateDoc(doc(db, "convocatorias", convId), datos);
     } else {
@@ -349,7 +352,8 @@ function Convocatorias() {
   }
 
   function mensajeConvocatoria(p) {
-    return `Hola${p.apoderadoNombre ? " " + p.apoderadoNombre : ""}, te convocamos a ${p.nombre} para el ${fecha}${hora ? " a las " + hora : ""} (${categoria}, ${tipo})${lugar ? " en " + lugar : ""}. ¿Podrá asistir? — Academia Curanipe`;
+    const rivalTxt = tipo === "Partido" && rival ? ` vs ${rival}` : "";
+    return `Hola${p.apoderadoNombre ? " " + p.apoderadoNombre : ""}, te convocamos a ${p.nombre} para el ${fecha}${hora ? " a las " + hora : ""} (${categoria}, ${tipo}${rivalTxt})${lugar ? " en " + lugar : ""}. ¿Podrá asistir? — Academia Curanipe`;
   }
 
   const confirmadas = catPlayers.filter((p) => respuestas[p.id] === "Confirmado").length;
@@ -384,6 +388,9 @@ function Convocatorias() {
             <option>Partido</option>
             <option>Actividad extra</option>
           </select>
+          {tipo === "Partido" && (
+            <input placeholder="Rival" value={rival} onChange={(e) => setRival(e.target.value)} />
+          )}
         </div>
         <button className="primary" style={{ marginTop: 10 }} onClick={crearOActualizar}>
           {convId ? "Guardar datos de la convocatoria" : "Crear convocatoria"}
@@ -451,6 +458,7 @@ function Asistencia() {
   const [lugar, setLugar] = useState("");
   const [hora, setHora] = useState("");
   const [tipo, setTipo] = useState("Entrenamiento");
+  const [rival, setRival] = useState("");
   const [profesor, setProfesor] = useState("");
   const [presentes, setPresentes] = useState({});
   const [msg, setMsg] = useState("");
@@ -478,6 +486,7 @@ function Asistencia() {
       setLugar(conv.lugar || "");
       setHora(conv.hora || "");
       setTipo(conv.tipo || "Entrenamiento");
+      setRival(conv.rival || "");
     }
     // eslint-disable-next-line
   }, [categoria, fecha, convs]);
@@ -493,7 +502,7 @@ function Asistencia() {
     setMsg("");
     const listaPresentes = catPlayers.filter((p) => presentes[p.id]).map((p) => p.id);
     const datos = {
-      categoria, fecha, lugar, hora, tipo, profesor,
+      categoria, fecha, lugar, hora, tipo, rival, profesor,
       presentes: listaPresentes,
       totalJugadoras: catPlayers.length,
     };
@@ -515,6 +524,7 @@ function Asistencia() {
     setLugar(s.lugar || "");
     setHora(s.hora || "");
     setTipo(s.tipo);
+    setRival(s.rival || "");
     setProfesor(s.profesor || "");
     const marcadas = {};
     (s.presentes || []).forEach((id) => (marcadas[id] = true));
@@ -556,6 +566,7 @@ function Asistencia() {
           </select>
           <input placeholder="Profesor a cargo" value={profesor} onChange={(e) => setProfesor(e.target.value)} />
         </div>
+        {tipo === "Partido" && rival && <div className="muted" style={{ marginTop: 6 }}>Rival: {rival}</div>}
       </div>
 
       <div className="card">
@@ -638,6 +649,7 @@ function Partidos() {
       (sesion.presentes || []).forEach((id) => { nuevas[id] = { jugo: true, goles: 0, asistencias: 0 }; });
       setJugadoras(nuevas);
       if (sesion.profesor) setProfesor(sesion.profesor);
+      if (sesion.rival) setRival(sesion.rival);
     }
     // eslint-disable-next-line
   }, [categoria, fecha, asistencias, partidos]);
