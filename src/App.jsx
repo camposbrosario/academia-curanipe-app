@@ -22,9 +22,9 @@ const CATEGORIAS = ["Sub-6", "Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16", "S
 // Roles que existen: "admin", "tesorera", "profesor", "sin-rol"
 // Qué pestañas ve cada rol:
 const TABS_BY_ROLE = {
-  admin: ["fichas", "asistencia", "profesores", "caja"],
-  tesorera: ["fichas", "asistencia", "profesores", "caja"],
-  profesor: ["fichas", "asistencia"],
+  admin: ["fichas", "convocatorias", "asistencia", "profesores", "caja"],
+  tesorera: ["fichas", "convocatorias", "asistencia", "profesores", "caja"],
+  profesor: ["fichas", "convocatorias", "asistencia"],
   "sin-rol": [],
 };
 
@@ -114,7 +114,7 @@ function Login() {
 function Dashboard({ user, role }) {
   const tabsDisponibles = TABS_BY_ROLE[role] || [];
   const [tab, setTab] = useState(tabsDisponibles[0] || "fichas");
-  const labels = { fichas: "Fichas", asistencia: "Asistencia", profesores: "Profesores", caja: "Caja general" };
+  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", profesores: "Profesores", caja: "Caja general" };
 
   return (
     <div>
@@ -129,6 +129,7 @@ function Dashboard({ user, role }) {
       </div>
       <div className="main">
         {tab === "fichas" && <Fichas />}
+        {tab === "convocatorias" && <Convocatorias />}
         {tab === "asistencia" && <Asistencia />}
         {tab === "profesores" && <Profesores />}
         {tab === "caja" && <Caja />}
@@ -277,6 +278,127 @@ function Fichas() {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function waLink(phone, msg) {
+  const p = (phone || "").replace(/[^0-9]/g, "");
+  if (!p) return null;
+  return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`;
+}
+
+function Convocatorias() {
+  const [players, setPlayers] = useState([]);
+  const [convs, setConvs] = useState([]);
+  const [categoria, setCategoria] = useState(CATEGORIAS[0]);
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [lugar, setLugar] = useState("");
+  const [hora, setHora] = useState("");
+  const [tipo, setTipo] = useState("Entrenamiento");
+  const [convId, setConvId] = useState(null);
+  const [respuestas, setRespuestas] = useState({});
+
+  useEffect(() => {
+    const unsub1 = onSnapshot(collection(db, "jugadoras"), (snap) => {
+      setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    const unsub2 = onSnapshot(collection(db, "convocatorias"), (snap) => {
+      setConvs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub1(); unsub2(); };
+  }, []);
+
+  const catPlayers = players.filter((p) => p.categoria === categoria);
+  const key = `${fecha}__${categoria}`;
+  const convExistente = convs.find((c) => c.fecha === fecha && c.categoria === categoria);
+
+  useEffect(() => {
+    if (convExistente) {
+      setConvId(convExistente.id);
+      setLugar(convExistente.lugar || "");
+      setHora(convExistente.hora || "");
+      setTipo(convExistente.tipo || "Entrenamiento");
+      setRespuestas(convExistente.respuestas || {});
+    } else {
+      setConvId(null);
+      setRespuestas({});
+    }
+    // eslint-disable-next-line
+  }, [key]);
+
+  async function crearOActualizar() {
+    const datos = { categoria, fecha, lugar, hora, tipo, respuestas };
+    if (convId) {
+      await updateDoc(doc(db, "convocatorias", convId), datos);
+    } else {
+      const ref = await addDoc(collection(db, "convocatorias"), { ...datos, creadoEn: new Date().toISOString() });
+      setConvId(ref.id);
+    }
+  }
+
+  async function setEstado(playerId, estado) {
+    const nuevas = { ...respuestas, [playerId]: estado };
+    setRespuestas(nuevas);
+    if (convId) {
+      await updateDoc(doc(db, "convocatorias", convId), { respuestas: nuevas });
+    }
+  }
+
+  function mensajeConvocatoria(p) {
+    return `Hola${p.apoderadoNombre ? " " + p.apoderadoNombre : ""}, te convocamos a ${p.nombre} para el ${fecha}${hora ? " a las " + hora : ""} (${categoria}, ${tipo})${lugar ? " en " + lugar : ""}. ¿Podrá asistir? — Academia Curanipe`;
+  }
+
+  const confirmadas = catPlayers.filter((p) => respuestas[p.id] === "Confirmado").length;
+
+  return (
+    <div>
+      <div className="card">
+        <div className="row">
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+          <input placeholder="Lugar" value={lugar} onChange={(e) => setLugar(e.target.value)} />
+          <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            <option>Entrenamiento</option>
+            <option>Partido</option>
+            <option>Actividad extra</option>
+          </select>
+        </div>
+        <button className="primary" style={{ marginTop: 10 }} onClick={crearOActualizar}>
+          {convId ? "Guardar datos de la convocatoria" : "Crear convocatoria"}
+        </button>
+        <div className="muted" style={{ marginTop: 6 }}>
+          Envía el mensaje por WhatsApp y anota manualmente lo que responda cada apoderado (no se captura solo).
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="muted" style={{ marginBottom: 8 }}>{confirmadas}/{catPlayers.length} confirmadas</div>
+        {catPlayers.length === 0 && <div className="muted">No hay jugadoras en esta categoría.</div>}
+        {catPlayers.map((p) => {
+          const link = waLink(p.apoderadoTelefono, mensajeConvocatoria(p));
+          return (
+            <div key={p.id} className="list-item">
+              <div>{p.nombre} {p.apellido}</div>
+              <div className="row">
+                <select value={respuestas[p.id] || "Pendiente"} onChange={(e) => setEstado(p.id, e.target.value)}>
+                  <option>Pendiente</option>
+                  <option>Confirmado</option>
+                  <option>No asiste</option>
+                </select>
+                {link ? (
+                  <a href={link} target="_blank" rel="noopener noreferrer" className="secondary" style={{ textDecoration: "none", display: "inline-block" }}>Enviar WhatsApp</a>
+                ) : (
+                  <span className="muted">Sin teléfono</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
