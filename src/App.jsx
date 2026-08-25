@@ -352,6 +352,21 @@ function Convocatorias() {
 
   const confirmadas = catPlayers.filter((p) => respuestas[p.id] === "Confirmado").length;
 
+  async function eliminarConv(id) {
+    await deleteDoc(doc(db, "convocatorias", id));
+    if (id === convId) { setConvId(null); setRespuestas({}); }
+  }
+
+  function cargarConv(c) {
+    setCategoria(c.categoria);
+    setFecha(c.fecha);
+  }
+
+  const historial = convs
+    .filter((c) => c.categoria === categoria)
+    .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
+    .slice(0, 15);
+
   return (
     <div>
       <div className="card">
@@ -400,6 +415,27 @@ function Convocatorias() {
           );
         })}
       </div>
+
+      <div className="card">
+        <div className="muted" style={{ marginBottom: 8 }}>Últimas convocatorias de {categoria}</div>
+        {historial.length === 0 && <div className="muted">Sin convocatorias registradas.</div>}
+        {historial.map((c) => {
+          const conf = Object.values(c.respuestas || {}).filter((v) => v === "Confirmado").length;
+          const total = players.filter((p) => p.categoria === c.categoria).length;
+          return (
+            <div key={c.id} className="list-item">
+              <div>
+                <b>{c.fecha}</b> · {c.tipo} {c.lugar && `· ${c.lugar}`} {c.hora && `· ${c.hora}`}
+                <div className="muted">{conf}/{total} confirmadas</div>
+              </div>
+              <div>
+                <button className="secondary" onClick={() => cargarConv(c)}>Abrir</button>{" "}
+                <button className="secondary" onClick={() => eliminarConv(c.id)}>Eliminar</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -407,6 +443,7 @@ function Convocatorias() {
 function Asistencia() {
   const [players, setPlayers] = useState([]);
   const [sesiones, setSesiones] = useState([]);
+  const [convs, setConvs] = useState([]);
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [lugar, setLugar] = useState("");
@@ -415,6 +452,7 @@ function Asistencia() {
   const [profesor, setProfesor] = useState("");
   const [presentes, setPresentes] = useState({});
   const [msg, setMsg] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
     const unsub1 = onSnapshot(collection(db, "jugadoras"), (snap) => {
@@ -423,16 +461,30 @@ function Asistencia() {
     const unsub2 = onSnapshot(collection(db, "asistencia"), (snap) => {
       setSesiones(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsub1(); unsub2(); };
+    const unsub3 = onSnapshot(collection(db, "convocatorias"), (snap) => {
+      setConvs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub1(); unsub2(); unsub3(); };
   }, []);
+
+  // Si no estamos editando una sesión ya guardada, y existe una convocatoria
+  // para esa misma fecha/categoría, precarga lugar/hora/tipo desde ahí.
+  useEffect(() => {
+    if (editingId) return;
+    const conv = convs.find((c) => c.categoria === categoria && c.fecha === fecha);
+    if (conv) {
+      setLugar(conv.lugar || "");
+      setHora(conv.hora || "");
+      setTipo(conv.tipo || "Entrenamiento");
+    }
+    // eslint-disable-next-line
+  }, [categoria, fecha, convs]);
 
   const catPlayers = players.filter((p) => p.categoria === categoria);
 
   function toggle(id) {
     setPresentes((prev) => ({ ...prev, [id]: !prev[id] }));
   }
-
-  const [editingId, setEditingId] = useState(null);
 
   async function guardar() {
     if (!profesor.trim()) { setMsg("Falta el nombre del profesor a cargo."); return; }
