@@ -22,9 +22,9 @@ const CATEGORIAS = ["Sub-6", "Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16", "S
 // Roles que existen: "admin", "tesorera", "profesor", "sin-rol"
 // Qué pestañas ve cada rol:
 const TABS_BY_ROLE = {
-  admin: ["fichas", "convocatorias", "asistencia", "profesores", "caja"],
-  tesorera: ["fichas", "convocatorias", "asistencia", "profesores", "caja"],
-  profesor: ["fichas", "convocatorias", "asistencia"],
+  admin: ["fichas", "convocatorias", "asistencia", "partidos", "series", "profesores", "caja"],
+  tesorera: ["fichas", "convocatorias", "asistencia", "partidos", "series", "profesores", "caja"],
+  profesor: ["fichas", "convocatorias", "asistencia", "partidos", "series"],
   "sin-rol": [],
 };
 
@@ -114,7 +114,7 @@ function Login() {
 function Dashboard({ user, role }) {
   const tabsDisponibles = TABS_BY_ROLE[role] || [];
   const [tab, setTab] = useState(tabsDisponibles[0] || "fichas");
-  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", profesores: "Profesores", caja: "Caja general" };
+  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", partidos: "Partidos", series: "Resumen por serie", profesores: "Profesores", caja: "Caja general" };
 
   return (
     <div>
@@ -131,6 +131,8 @@ function Dashboard({ user, role }) {
         {tab === "fichas" && <Fichas />}
         {tab === "convocatorias" && <Convocatorias />}
         {tab === "asistencia" && <Asistencia />}
+        {tab === "partidos" && <Partidos />}
+        {tab === "series" && <Series />}
         {tab === "profesores" && <Profesores />}
         {tab === "caja" && <Caja />}
       </div>
@@ -593,6 +595,185 @@ function Asistencia() {
 
 function emptyProfesorForm() {
   return { nombre: "", telefono: "", categorias: [] };
+}
+
+function Partidos() {
+  const [partidos, setPartidos] = useState([]);
+  const [categoria, setCategoria] = useState(CATEGORIAS[0]);
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [rival, setRival] = useState("");
+  const [tipo, setTipo] = useState("Liga");
+  const [golesPropios, setGolesPropios] = useState("");
+  const [golesRival, setGolesRival] = useState("");
+  const [profesor, setProfesor] = useState("");
+  const [evaluacion, setEvaluacion] = useState("");
+  const [editingId, setEditingId] = useState(null);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "partidos"), (snap) => {
+      setPartidos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  function limpiar() {
+    setFecha(new Date().toISOString().slice(0, 10));
+    setRival(""); setTipo("Liga"); setGolesPropios(""); setGolesRival("");
+    setProfesor(""); setEvaluacion(""); setEditingId(null);
+  }
+
+  async function guardar() {
+    if (!rival.trim()) { setMsg("Falta el rival."); return; }
+    setMsg("");
+    const datos = {
+      categoria, fecha, rival, tipo,
+      golesPropios: Number(golesPropios) || 0,
+      golesRival: Number(golesRival) || 0,
+      profesor, evaluacion,
+    };
+    if (editingId) {
+      await updateDoc(doc(db, "partidos", editingId), datos);
+    } else {
+      await addDoc(collection(db, "partidos"), datos);
+    }
+    limpiar();
+  }
+
+  function editar(p) {
+    setEditingId(p.id);
+    setCategoria(p.categoria); setFecha(p.fecha); setRival(p.rival); setTipo(p.tipo);
+    setGolesPropios(p.golesPropios); setGolesRival(p.golesRival);
+    setProfesor(p.profesor || ""); setEvaluacion(p.evaluacion || "");
+  }
+  async function eliminar(id) { await deleteDoc(doc(db, "partidos", id)); }
+
+  const listaCategoria = partidos.filter((p) => p.categoria === categoria).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+
+  return (
+    <div>
+      <div className="card">
+        {msg && <div className="error">{msg}</div>}
+        <div className="row">
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+          <input placeholder="Rival" value={rival} onChange={(e) => setRival(e.target.value)} />
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            <option>Liga</option>
+            <option>Amistoso</option>
+          </select>
+          <input type="number" placeholder="Goles propios" value={golesPropios} onChange={(e) => setGolesPropios(e.target.value)} style={{ width: 90 }} />
+          <input type="number" placeholder="Goles rival" value={golesRival} onChange={(e) => setGolesRival(e.target.value)} style={{ width: 90 }} />
+          <input placeholder="Profesor" value={profesor} onChange={(e) => setProfesor(e.target.value)} />
+        </div>
+        <textarea placeholder="Evaluación general del encuentro" value={evaluacion} onChange={(e) => setEvaluacion(e.target.value)} style={{ width: "100%", marginTop: 8 }} rows={2} />
+        <div className="row" style={{ marginTop: 8 }}>
+          <button className="primary" onClick={guardar}>{editingId ? "Guardar cambios" : "Registrar partido"}</button>
+          {editingId && <button className="secondary" onClick={limpiar}>Cancelar</button>}
+        </div>
+      </div>
+
+      <div className="card">
+        {listaCategoria.length === 0 && <div className="muted">No hay partidos registrados para {categoria}.</div>}
+        {listaCategoria.map((p) => (
+          <div key={p.id} className="list-item">
+            <div>
+              <b>{p.fecha}</b> · vs {p.rival} ({p.tipo}) — {p.golesPropios}-{p.golesRival}
+              {p.profesor && <div className="muted">Profesor: {p.profesor}</div>}
+              {p.evaluacion && <div className="muted">"{p.evaluacion}"</div>}
+            </div>
+            <div>
+              <button className="secondary" onClick={() => editar(p)}>Editar</button>{" "}
+              <button className="secondary" onClick={() => eliminar(p.id)}>Eliminar</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Series() {
+  const [categoria, setCategoria] = useState(CATEGORIAS[0]);
+  const [players, setPlayers] = useState([]);
+  const [asistencia, setAsistencia] = useState([]);
+  const [convs, setConvs] = useState([]);
+  const [partidos, setPartidos] = useState([]);
+
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db, "jugadoras"), (s) => setPlayers(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u2 = onSnapshot(collection(db, "asistencia"), (s) => setAsistencia(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u3 = onSnapshot(collection(db, "convocatorias"), (s) => setConvs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u4 = onSnapshot(collection(db, "partidos"), (s) => setPartidos(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return () => { u1(); u2(); u3(); u4(); };
+  }, []);
+
+  const inscritas = players.filter((p) => p.categoria === categoria);
+  const sesionesCat = asistencia.filter((s) => s.categoria === categoria);
+  const totalPresentes = sesionesCat.reduce((sum, s) => sum + (s.presentes?.length || 0), 0);
+  const totalPosible = sesionesCat.reduce((sum, s) => sum + (s.totalJugadoras || 0), 0);
+  const pctAsistencia = totalPosible ? Math.round((totalPresentes / totalPosible) * 100) : 0;
+
+  const convsCat = convs.filter((c) => c.categoria === categoria);
+  let confirmadas = 0, totalConv = 0;
+  convsCat.forEach((c) => {
+    Object.values(c.respuestas || {}).forEach((v) => {
+      totalConv++;
+      if (v === "Confirmado") confirmadas++;
+    });
+  });
+
+  const partidosCat = partidos.filter((p) => p.categoria === categoria).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+
+  return (
+    <div>
+      <div className="card">
+        <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+          {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+        </select>
+      </div>
+
+      <div className="row" style={{ marginBottom: 16 }}>
+        <div className="card" style={{ flex: 1, minWidth: 140 }}>
+          <div className="muted">Alumnas inscritas</div>
+          <div style={{ fontSize: 22, fontWeight: "bold" }}>{inscritas.length}</div>
+        </div>
+        <div className="card" style={{ flex: 1, minWidth: 140 }}>
+          <div className="muted">Asistencia promedio</div>
+          <div style={{ fontSize: 22, fontWeight: "bold" }}>{pctAsistencia}%</div>
+        </div>
+        <div className="card" style={{ flex: 1, minWidth: 140 }}>
+          <div className="muted">Convocatorias confirmadas</div>
+          <div style={{ fontSize: 22, fontWeight: "bold" }}>{confirmadas}/{totalConv}</div>
+        </div>
+        <div className="card" style={{ flex: 1, minWidth: 140 }}>
+          <div className="muted">Partidos jugados</div>
+          <div style={{ fontSize: 22, fontWeight: "bold" }}>{partidosCat.length}</div>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="muted" style={{ marginBottom: 8 }}>Resultados de partidos</div>
+        {partidosCat.length === 0 && <div className="muted">Sin partidos registrados.</div>}
+        {partidosCat.map((p) => (
+          <div key={p.id} className="muted" style={{ padding: "4px 0" }}>
+            {p.fecha} · vs {p.rival} ({p.tipo}) — {p.golesPropios}-{p.golesRival}
+          </div>
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="muted" style={{ marginBottom: 8 }}>Alumnas inscritas</div>
+        <div className="muted">{inscritas.map((p) => `${p.nombre} ${p.apellido}`).join(", ") || "Ninguna"}</div>
+      </div>
+
+      <div className="card">
+        <div className="muted">El nivel táctico de equipo se va a sumar aquí cuando armemos el módulo de diagnóstico táctico.</div>
+      </div>
+    </div>
+  );
 }
 
 function Profesores() {
