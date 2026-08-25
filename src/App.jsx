@@ -599,6 +599,7 @@ function emptyProfesorForm() {
 
 function Partidos() {
   const [partidos, setPartidos] = useState([]);
+  const [players, setPlayers] = useState([]);
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [rival, setRival] = useState("");
@@ -607,6 +608,7 @@ function Partidos() {
   const [golesRival, setGolesRival] = useState("");
   const [profesor, setProfesor] = useState("");
   const [evaluacion, setEvaluacion] = useState("");
+  const [jugadoras, setJugadoras] = useState({}); // { playerId: { jugo, goles, asistencias } }
   const [editingId, setEditingId] = useState(null);
   const [msg, setMsg] = useState("");
 
@@ -614,13 +616,31 @@ function Partidos() {
     const unsub = onSnapshot(collection(db, "partidos"), (snap) => {
       setPartidos(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => unsub();
+    const unsub2 = onSnapshot(collection(db, "jugadoras"), (snap) => {
+      setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub(); unsub2(); };
   }, []);
+
+  const catPlayers = players.filter((p) => p.categoria === categoria);
+
+  function datosJugadora(id) {
+    return jugadoras[id] || { jugo: false, goles: 0, asistencias: 0 };
+  }
+  function setJugo(id, val) {
+    setJugadoras((prev) => ({ ...prev, [id]: { ...datosJugadora(id), jugo: val } }));
+  }
+  function setGoles(id, val) {
+    setJugadoras((prev) => ({ ...prev, [id]: { ...datosJugadora(id), goles: Number(val) || 0 } }));
+  }
+  function setAsist(id, val) {
+    setJugadoras((prev) => ({ ...prev, [id]: { ...datosJugadora(id), asistencias: Number(val) || 0 } }));
+  }
 
   function limpiar() {
     setFecha(new Date().toISOString().slice(0, 10));
     setRival(""); setTipo("Liga"); setGolesPropios(""); setGolesRival("");
-    setProfesor(""); setEvaluacion(""); setEditingId(null);
+    setProfesor(""); setEvaluacion(""); setJugadoras({}); setEditingId(null);
   }
 
   async function guardar() {
@@ -630,7 +650,7 @@ function Partidos() {
       categoria, fecha, rival, tipo,
       golesPropios: Number(golesPropios) || 0,
       golesRival: Number(golesRival) || 0,
-      profesor, evaluacion,
+      profesor, evaluacion, jugadoras,
     };
     if (editingId) {
       await updateDoc(doc(db, "partidos", editingId), datos);
@@ -645,6 +665,7 @@ function Partidos() {
     setCategoria(p.categoria); setFecha(p.fecha); setRival(p.rival); setTipo(p.tipo);
     setGolesPropios(p.golesPropios); setGolesRival(p.golesRival);
     setProfesor(p.profesor || ""); setEvaluacion(p.evaluacion || "");
+    setJugadoras(p.jugadoras || {});
   }
   async function eliminar(id) { await deleteDoc(doc(db, "partidos", id)); }
 
@@ -669,6 +690,27 @@ function Partidos() {
           <input placeholder="Profesor" value={profesor} onChange={(e) => setProfesor(e.target.value)} />
         </div>
         <textarea placeholder="Evaluación general del encuentro" value={evaluacion} onChange={(e) => setEvaluacion(e.target.value)} style={{ width: "100%", marginTop: 8 }} rows={2} />
+
+        <div className="muted" style={{ margin: "12px 0 6px" }}>Jugadoras: marca quién jugó y sus goles/asistencias (deja sin marcar a las que no llegaron)</div>
+        {catPlayers.length === 0 && <div className="muted">No hay jugadoras en esta categoría.</div>}
+        {catPlayers.map((p) => {
+          const d = datosJugadora(p.id);
+          return (
+            <div key={p.id} className="row" style={{ padding: "4px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 160 }}>
+                <input type="checkbox" checked={d.jugo} onChange={(e) => setJugo(p.id, e.target.checked)} />
+                {p.nombre} {p.apellido}
+              </label>
+              {d.jugo && (
+                <>
+                  <input type="number" min="0" placeholder="Goles" value={d.goles} onChange={(e) => setGoles(p.id, e.target.value)} style={{ width: 80 }} />
+                  <input type="number" min="0" placeholder="Asistencias" value={d.asistencias} onChange={(e) => setAsist(p.id, e.target.value)} style={{ width: 100 }} />
+                </>
+              )}
+            </div>
+          );
+        })}
+
         <div className="row" style={{ marginTop: 8 }}>
           <button className="primary" onClick={guardar}>{editingId ? "Guardar cambios" : "Registrar partido"}</button>
           {editingId && <button className="secondary" onClick={limpiar}>Cancelar</button>}
@@ -677,19 +719,32 @@ function Partidos() {
 
       <div className="card">
         {listaCategoria.length === 0 && <div className="muted">No hay partidos registrados para {categoria}.</div>}
-        {listaCategoria.map((p) => (
-          <div key={p.id} className="list-item">
-            <div>
-              <b>{p.fecha}</b> · vs {p.rival} ({p.tipo}) — {p.golesPropios}-{p.golesRival}
-              {p.profesor && <div className="muted">Profesor: {p.profesor}</div>}
-              {p.evaluacion && <div className="muted">"{p.evaluacion}"</div>}
+        {listaCategoria.map((p) => {
+          const jugaron = Object.entries(p.jugadoras || {}).filter(([, v]) => v.jugo);
+          const goleadoras = jugaron.filter(([, v]) => v.goles > 0);
+          return (
+            <div key={p.id} className="list-item">
+              <div>
+                <b>{p.fecha}</b> · vs {p.rival} ({p.tipo}) — {p.golesPropios}-{p.golesRival}
+                {p.profesor && <div className="muted">Profesor: {p.profesor}</div>}
+                <div className="muted">{jugaron.length} jugadoras participaron</div>
+                {goleadoras.length > 0 && (
+                  <div className="muted">
+                    Goleadoras: {goleadoras.map(([id, v]) => {
+                      const player = players.find((pl) => pl.id === id);
+                      return `${player?.nombre || "-"} (${v.goles})`;
+                    }).join(", ")}
+                  </div>
+                )}
+                {p.evaluacion && <div className="muted">"{p.evaluacion}"</div>}
+              </div>
+              <div>
+                <button className="secondary" onClick={() => editar(p)}>Editar</button>{" "}
+                <button className="secondary" onClick={() => eliminar(p.id)}>Eliminar</button>
+              </div>
             </div>
-            <div>
-              <button className="secondary" onClick={() => editar(p)}>Editar</button>{" "}
-              <button className="secondary" onClick={() => eliminar(p.id)}>Eliminar</button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
