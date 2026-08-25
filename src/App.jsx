@@ -600,6 +600,7 @@ function emptyProfesorForm() {
 function Partidos() {
   const [partidos, setPartidos] = useState([]);
   const [players, setPlayers] = useState([]);
+  const [asistencias, setAsistencias] = useState([]);
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [rival, setRival] = useState("");
@@ -619,8 +620,27 @@ function Partidos() {
     const unsub2 = onSnapshot(collection(db, "jugadoras"), (snap) => {
       setPlayers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsub(); unsub2(); };
+    const unsub3 = onSnapshot(collection(db, "asistencia"), (snap) => {
+      setAsistencias(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub(); unsub2(); unsub3(); };
   }, []);
+
+  // Si no estamos editando un partido ya guardado, busca la sesión de Asistencia
+  // (tipo Partido) para esa misma fecha/categoría y precarga quiénes jugaron y el profesor.
+  useEffect(() => {
+    if (editingId) return;
+    const yaExistePartido = partidos.some((p) => p.categoria === categoria && p.fecha === fecha);
+    if (yaExistePartido) return; // si ya hay un partido guardado para esa fecha, no lo pisamos
+    const sesion = asistencias.find((s) => s.categoria === categoria && s.fecha === fecha && s.tipo === "Partido");
+    if (sesion) {
+      const nuevas = {};
+      (sesion.presentes || []).forEach((id) => { nuevas[id] = { jugo: true, goles: 0, asistencias: 0 }; });
+      setJugadoras(nuevas);
+      if (sesion.profesor) setProfesor(sesion.profesor);
+    }
+    // eslint-disable-next-line
+  }, [categoria, fecha, asistencias, partidos]);
 
   const catPlayers = players.filter((p) => p.categoria === categoria);
 
@@ -691,7 +711,7 @@ function Partidos() {
         </div>
         <textarea placeholder="Evaluación general del encuentro" value={evaluacion} onChange={(e) => setEvaluacion(e.target.value)} style={{ width: "100%", marginTop: 8 }} rows={2} />
 
-        <div className="muted" style={{ margin: "12px 0 6px" }}>Jugadoras: marca quién jugó y sus goles/asistencias (deja sin marcar a las que no llegaron)</div>
+        <div className="muted" style={{ margin: "12px 0 6px" }}>Jugadoras: marca quién jugó y sus goles/asistencias (deja sin marcar a las que no llegaron). Si ya registraste este partido en Asistencia, se precargan solas.</div>
         {catPlayers.length === 0 && <div className="muted">No hay jugadoras en esta categoría.</div>}
         {catPlayers.map((p) => {
           const d = datosJugadora(p.id);
