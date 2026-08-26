@@ -331,7 +331,7 @@ function Convocatorias() {
       setRespuestas({});
     }
     // eslint-disable-next-line
-  }, [key]);
+  }, [key, convs]);
 
   async function crearOActualizar() {
     const datos = { categoria, fecha, lugar, hora, tipo, rival, respuestas };
@@ -434,7 +434,7 @@ function Convocatorias() {
           return (
             <div key={c.id} className="list-item">
               <div>
-                <b>{c.fecha}</b> · {c.tipo} {c.lugar && `· ${c.lugar}`} {c.hora && `· ${c.hora}`}
+                <b>{c.fecha}</b> · {c.tipo}{c.tipo === "Partido" && c.rival ? ` vs ${c.rival}` : ""} {c.lugar && `· ${c.lugar}`} {c.hora && `· ${c.hora}`}
                 <div className="muted">{conf}/{total} confirmadas</div>
               </div>
               <div>
@@ -590,7 +590,7 @@ function Asistencia() {
         {sesionesCategoria.map((s) => (
           <div key={s.id} className="list-item">
             <div>
-              <b>{s.fecha}</b> · {s.tipo} {s.lugar && `· ${s.lugar}`} {s.hora && `· ${s.hora}`}
+              <b>{s.fecha}</b> · {s.tipo}{s.tipo === "Partido" && s.rival ? ` vs ${s.rival}` : ""} {s.lugar && `· ${s.lugar}`} {s.hora && `· ${s.hora}`}
               <div className="muted">Profesor: {s.profesor} · {s.presentes?.length || 0}/{s.totalJugadoras} presentes</div>
             </div>
             <div>
