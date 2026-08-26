@@ -6,7 +6,7 @@ body {
   color: #1a1a1a;
 }
 .header {
-  background: #065f46;
+  background: #1e3a8a;
   color: white;
   padding: 12px 16px;
   position: sticky;
@@ -16,17 +16,17 @@ body {
 .header h1 { margin: 0 0 8px 0; font-size: 18px; }
 .nav { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
 .nav button {
-  background: #047857; color: white; border: none; padding: 6px 12px;
+  background: #2563eb; color: white; border: none; padding: 6px 12px;
   border-radius: 6px; font-size: 14px; white-space: nowrap; cursor: pointer;
 }
-.nav button.active { background: white; color: #065f46; font-weight: 600; }
+.nav button.active { background: white; color: #1e3a8a; font-weight: 600; }
 .main { padding: 16px; max-width: 900px; margin: 0 auto; }
 .card { background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 input, select, textarea {
   border: 1px solid #d1d5db; border-radius: 6px; padding: 8px; font-size: 14px;
 }
-button.primary { background: #047857; color: white; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+button.primary { background: #1e3a8a; color: white; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
 button.secondary { background: white; border: 1px solid #d1d5db; border-radius: 6px; padding: 8px 16px; cursor: pointer; }
 .list-item { border-bottom: 1px solid #e5e7eb; padding: 10px 0; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
 .muted { color: #6b7280; font-size: 13px; }
