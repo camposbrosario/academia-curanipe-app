@@ -285,6 +285,15 @@ function Fichas() {
   );
 }
 
+function esPartido(tipo) {
+  return (tipo || "").startsWith("Partido");
+}
+function tipoLigaAmistoso(tipoSesion) {
+  if (tipoSesion === "Partido Liga") return "Liga";
+  if (tipoSesion === "Partido Amistoso") return "Amistoso";
+  return "Liga";
+}
+
 function waLink(phone, msg) {
   const p = (phone || "").replace(/[^0-9]/g, "");
   if (!p) return null;
@@ -352,7 +361,7 @@ function Convocatorias() {
   }
 
   function mensajeConvocatoria(p) {
-    const rivalTxt = tipo === "Partido" && rival ? ` vs ${rival}` : "";
+    const rivalTxt = esPartido(tipo) && rival ? ` vs ${rival}` : "";
     return `Hola${p.apoderadoNombre ? " " + p.apoderadoNombre : ""}, te convocamos a ${p.nombre} para el ${fecha}${hora ? " a las " + hora : ""} (${categoria}, ${tipo}${rivalTxt})${lugar ? " en " + lugar : ""}. ¿Podrá asistir? — Academia Curanipe`;
   }
 
@@ -385,10 +394,11 @@ function Convocatorias() {
           <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
           <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
             <option>Entrenamiento</option>
-            <option>Partido</option>
+            <option>Partido Liga</option>
+            <option>Partido Amistoso</option>
             <option>Actividad extra</option>
           </select>
-          {tipo === "Partido" && (
+          {esPartido(tipo) && (
             <input placeholder="Rival" value={rival} onChange={(e) => setRival(e.target.value)} />
           )}
         </div>
@@ -434,7 +444,7 @@ function Convocatorias() {
           return (
             <div key={c.id} className="list-item">
               <div>
-                <b>{c.fecha}</b> · {c.tipo}{c.tipo === "Partido" && c.rival ? ` vs ${c.rival}` : ""} {c.lugar && `· ${c.lugar}`} {c.hora && `· ${c.hora}`}
+                <b>{c.fecha}</b> · {c.tipo}{esPartido(c.tipo) && c.rival ? ` vs ${c.rival}` : ""} {c.lugar && `· ${c.lugar}`} {c.hora && `· ${c.hora}`}
                 <div className="muted">{conf}/{total} confirmadas</div>
               </div>
               <div>
@@ -560,13 +570,14 @@ function Asistencia() {
           <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} />
           <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
             <option>Entrenamiento</option>
-            <option>Partido</option>
+            <option>Partido Liga</option>
+            <option>Partido Amistoso</option>
             <option>Actividad extra</option>
             <option>Suspendido</option>
           </select>
           <input placeholder="Profesor a cargo" value={profesor} onChange={(e) => setProfesor(e.target.value)} />
         </div>
-        {tipo === "Partido" && rival && <div className="muted" style={{ marginTop: 6 }}>Rival: {rival}</div>}
+        {esPartido(tipo) && rival && <div className="muted" style={{ marginTop: 6 }}>Rival: {rival}</div>}
       </div>
 
       <div className="card">
@@ -590,7 +601,7 @@ function Asistencia() {
         {sesionesCategoria.map((s) => (
           <div key={s.id} className="list-item">
             <div>
-              <b>{s.fecha}</b> · {s.tipo}{s.tipo === "Partido" && s.rival ? ` vs ${s.rival}` : ""} {s.lugar && `· ${s.lugar}`} {s.hora && `· ${s.hora}`}
+              <b>{s.fecha}</b> · {s.tipo}{esPartido(s.tipo) && s.rival ? ` vs ${s.rival}` : ""} {s.lugar && `· ${s.lugar}`} {s.hora && `· ${s.hora}`}
               <div className="muted">Profesor: {s.profesor} · {s.presentes?.length || 0}/{s.totalJugadoras} presentes</div>
             </div>
             <div>
@@ -643,13 +654,14 @@ function Partidos() {
     if (editingId) return;
     const yaExistePartido = partidos.some((p) => p.categoria === categoria && p.fecha === fecha);
     if (yaExistePartido) return; // si ya hay un partido guardado para esa fecha, no lo pisamos
-    const sesion = asistencias.find((s) => s.categoria === categoria && s.fecha === fecha && s.tipo === "Partido");
+    const sesion = asistencias.find((s) => s.categoria === categoria && s.fecha === fecha && esPartido(s.tipo));
     if (sesion) {
       const nuevas = {};
       (sesion.presentes || []).forEach((id) => { nuevas[id] = { jugo: true, goles: 0, asistencias: 0 }; });
       setJugadoras(nuevas);
       if (sesion.profesor) setProfesor(sesion.profesor);
       if (sesion.rival) setRival(sesion.rival);
+      setTipo(tipoLigaAmistoso(sesion.tipo));
     }
     // eslint-disable-next-line
   }, [categoria, fecha, asistencias, partidos]);
