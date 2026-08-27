@@ -22,9 +22,9 @@ const CATEGORIAS = ["Sub-6", "Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16", "S
 // Roles que existen: "admin", "tesorera", "profesor", "sin-rol"
 // Qué pestañas ve cada rol:
 const TABS_BY_ROLE = {
-  admin: ["fichas", "convocatorias", "asistencia", "partidos", "series", "profesores", "caja"],
-  tesorera: ["fichas", "convocatorias", "asistencia", "partidos", "series", "profesores", "caja"],
-  profesor: ["fichas", "convocatorias", "asistencia", "partidos", "series"],
+  admin: ["fichas", "convocatorias", "asistencia", "partidos", "diagnostico", "series", "profesores", "caja"],
+  tesorera: ["fichas", "convocatorias", "asistencia", "partidos", "diagnostico", "series", "profesores", "caja"],
+  profesor: ["fichas", "convocatorias", "asistencia", "partidos", "diagnostico", "series"],
   "sin-rol": [],
 };
 
@@ -114,7 +114,7 @@ function Login() {
 function Dashboard({ user, role }) {
   const tabsDisponibles = TABS_BY_ROLE[role] || [];
   const [tab, setTab] = useState(tabsDisponibles[0] || "fichas");
-  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", partidos: "Partidos", series: "Resumen por serie", profesores: "Profesores", caja: "Caja general" };
+  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", partidos: "Partidos", diagnostico: "Diagnóstico equipo", series: "Resumen por serie", profesores: "Profesores", caja: "Caja general" };
 
   return (
     <div>
@@ -132,6 +132,7 @@ function Dashboard({ user, role }) {
         {tab === "convocatorias" && <Convocatorias />}
         {tab === "asistencia" && <Asistencia />}
         {tab === "partidos" && <Partidos />}
+        {tab === "diagnostico" && <DiagnosticoEquipo />}
         {tab === "series" && <Series />}
         {tab === "profesores" && <Profesores />}
         {tab === "caja" && <Caja />}
@@ -831,19 +832,119 @@ function Partidos() {
   );
 }
 
+const ETAPAS = ["EGO 0", "EGO I", "EGO II", "SUMA I", "SUMA II", "Colectiva 1", "Colectiva 2"];
+const FASES = ["Ofensiva", "Defensiva"];
+
+function DiagnosticoEquipo() {
+  const [descs, setDescs] = useState([]);
+  const [diags, setDiags] = useState([]);
+  const [bankFase, setBankFase] = useState(FASES[0]);
+  const [bankEtapa, setBankEtapa] = useState(ETAPAS[1]);
+  const [bankTexto, setBankTexto] = useState("");
+  const [categoria, setCategoria] = useState(CATEGORIAS[0]);
+  const [faseEval, setFaseEval] = useState(FASES[0]);
+
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db, "teamDescriptions"), (s) => setDescs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u2 = onSnapshot(collection(db, "teamDiagnostics"), (s) => setDiags(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return () => { u1(); u2(); };
+  }, []);
+
+  async function addDesc() {
+    if (!bankTexto.trim()) return;
+    await addDoc(collection(db, "teamDescriptions"), { fase: bankFase, etapa: bankEtapa, texto: bankTexto });
+    setBankTexto("");
+  }
+  async function removeDesc(id) { await deleteDoc(doc(db, "teamDescriptions", id)); }
+
+  async function elegir(d) {
+    await addDoc(collection(db, "teamDiagnostics"), {
+      categoria, fase: faseEval, etapa: d.etapa,
+      fecha: new Date().toISOString().slice(0, 10),
+    });
+  }
+  async function eliminarDiag(id) { await deleteDoc(doc(db, "teamDiagnostics", id)); }
+
+  const opciones = descs.filter((d) => d.fase === faseEval);
+  const historial = diags
+    .filter((d) => d.categoria === categoria)
+    .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
+    .slice(0, 10);
+
+  return (
+    <div>
+      <div className="card">
+        <div className="muted" style={{ marginBottom: 8 }}>
+          Banco de descripciones (pega aquí una vez tu material de fase ofensiva/defensiva por etapa; después eliges la que corresponda para diagnosticar al equipo)
+        </div>
+        <div className="row">
+          <select value={bankFase} onChange={(e) => setBankFase(e.target.value)}>
+            {FASES.map((f) => <option key={f}>{f}</option>)}
+          </select>
+          <select value={bankEtapa} onChange={(e) => setBankEtapa(e.target.value)}>
+            {ETAPAS.map((e) => <option key={e}>{e}</option>)}
+          </select>
+          <button className="primary" onClick={addDesc}>Guardar descripción</button>
+        </div>
+        <textarea placeholder="Descripción del comportamiento colectivo para esta fase y etapa" value={bankTexto} onChange={(e) => setBankTexto(e.target.value)} style={{ width: "100%", marginTop: 8 }} rows={2} />
+        <div style={{ marginTop: 10, maxHeight: 180, overflowY: "auto" }}>
+          {descs.map((d) => (
+            <div key={d.id} className="muted" style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f0f0f0", padding: "4px 0" }}>
+              <span><b>{d.fase} · {d.etapa}:</b> {d.texto}</span>
+              <button className="secondary" onClick={() => removeDesc(d.id)}>Quitar</button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="row">
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <select value={faseEval} onChange={(e) => setFaseEval(e.target.value)}>
+            {FASES.map((f) => <option key={f}>{f}</option>)}
+          </select>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          {opciones.length === 0 && <div className="muted">No hay descripciones cargadas para esta fase todavía — agrégalas arriba.</div>}
+          {opciones.map((d) => (
+            <button key={d.id} onClick={() => elegir(d)} className="secondary" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 6 }}>
+              <b>{d.etapa}:</b> {d.texto}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="muted" style={{ marginBottom: 8 }}>Historial de {categoria}</div>
+        {historial.length === 0 && <div className="muted">Sin diagnósticos registrados.</div>}
+        {historial.map((d) => (
+          <div key={d.id} className="list-item">
+            <div>{d.fecha} — {d.fase}: <b>{d.etapa}</b></div>
+            <button className="secondary" onClick={() => eliminarDiag(d.id)}>Eliminar</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Series() {
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
   const [players, setPlayers] = useState([]);
   const [asistencia, setAsistencia] = useState([]);
   const [convs, setConvs] = useState([]);
   const [partidos, setPartidos] = useState([]);
+  const [diags, setDiags] = useState([]);
 
   useEffect(() => {
     const u1 = onSnapshot(collection(db, "jugadoras"), (s) => setPlayers(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u2 = onSnapshot(collection(db, "asistencia"), (s) => setAsistencia(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u3 = onSnapshot(collection(db, "convocatorias"), (s) => setConvs(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
     const u4 = onSnapshot(collection(db, "partidos"), (s) => setPartidos(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
-    return () => { u1(); u2(); u3(); u4(); };
+    const u5 = onSnapshot(collection(db, "teamDiagnostics"), (s) => setDiags(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, []);
 
   const inscritas = players.filter((p) => p.categoria === categoria);
@@ -906,7 +1007,18 @@ function Series() {
       </div>
 
       <div className="card">
-        <div className="muted">El nivel táctico de equipo se va a sumar aquí cuando armemos el módulo de diagnóstico táctico.</div>
+        <div className="muted" style={{ marginBottom: 8 }}>Nivel táctico de equipo (último diagnóstico)</div>
+        {(() => {
+          const diagsCat = diags.filter((d) => d.categoria === categoria);
+          const ofensiva = diagsCat.filter((d) => d.fase === "Ofensiva").sort((a, b) => (a.fecha < b.fecha ? 1 : -1))[0];
+          const defensiva = diagsCat.filter((d) => d.fase === "Defensiva").sort((a, b) => (a.fecha < b.fecha ? 1 : -1))[0];
+          return (
+            <>
+              <div>Fase ofensiva: <b>{ofensiva ? ofensiva.etapa : "sin diagnóstico"}</b></div>
+              <div>Fase defensiva: <b>{defensiva ? defensiva.etapa : "sin diagnóstico"}</b></div>
+            </>
+          );
+        })()}
       </div>
     </div>
   );
