@@ -237,8 +237,45 @@ function Fichas() {
   function edit(p) { setForm({ ...emptyForm(), ...p }); setEditingId(p.id); }
   async function remove(id) { await deleteDoc(doc(db, "jugadoras", id)); }
 
+  const hoy = new Date();
+  const proximosCumples = players
+    .filter((p) => p.fechaNacimiento)
+    .map((p) => {
+      const partes = p.fechaNacimiento.split("-").map(Number);
+      const mes = partes[1], dia = partes[2];
+      if (!mes || !dia) return null;
+      let prox = new Date(hoy.getFullYear(), mes - 1, dia);
+      const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+      if (prox < hoySinHora) prox = new Date(hoy.getFullYear() + 1, mes - 1, dia);
+      const dias = Math.round((prox - hoySinHora) / 86400000);
+      return { ...p, dias };
+    })
+    .filter((p) => p && p.dias <= 30)
+    .sort((a, b) => a.dias - b.dias);
+
   return (
     <div>
+      {proximosCumples.length > 0 && (
+        <div className="card" style={{ borderColor: "#93c5fd", background: "#eff6ff" }}>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>🎂 Próximos cumpleaños (30 días)</div>
+          {proximosCumples.map((p) => {
+            const msg = `¡Feliz cumpleaños a ${p.nombre} de parte de toda la Academia Curanipe! 🎉⚽`;
+            const wa = (p.apoderadoTelefono || "").replace(/[^0-9]/g, "");
+            const href = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(msg)}` : null;
+            const hrefGrupo = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+            return (
+              <div key={p.id} className="list-item">
+                <div>{p.nombre} {p.apellido} — {p.dias === 0 ? "¡es hoy!" : `en ${p.dias} día(s)`}</div>
+                <div className="row">
+                  {href && <a href={href} target="_blank" rel="noopener noreferrer" className="secondary" style={{ textDecoration: "none", display: "inline-block" }}>Al apoderado</a>}
+                  <a href={hrefGrupo} target="_blank" rel="noopener noreferrer" className="secondary" style={{ textDecoration: "none", display: "inline-block" }}>Elegir grupo/chat</a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div className="card">
         <div className="muted" style={{ marginBottom: 8 }}>Importar jugadoras desde tu Excel (columnas: Nombre, Apellido, Rut, Fecha de nacimiento, Categoria)</div>
         <input type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} disabled={importando} />
