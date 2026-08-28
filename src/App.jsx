@@ -22,9 +22,9 @@ const CATEGORIAS = ["Sub-6", "Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16", "S
 // Roles que existen: "admin", "tesorera", "profesor", "sin-rol"
 // Qué pestañas ve cada rol:
 const TABS_BY_ROLE = {
-  admin: ["fichas", "convocatorias", "asistencia", "partidos", "diagnostico", "series", "profesores", "caja"],
-  tesorera: ["fichas", "convocatorias", "asistencia", "partidos", "diagnostico", "series", "profesores", "caja"],
-  profesor: ["fichas", "convocatorias", "asistencia", "partidos", "diagnostico", "series"],
+  admin: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "diagnostico", "series", "profesores", "caja"],
+  tesorera: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "diagnostico", "series", "profesores", "caja"],
+  profesor: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "diagnostico", "series"],
   "sin-rol": [],
 };
 
@@ -114,7 +114,7 @@ function Login() {
 function Dashboard({ user, role }) {
   const tabsDisponibles = TABS_BY_ROLE[role] || [];
   const [tab, setTab] = useState(tabsDisponibles[0] || "fichas");
-  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", partidos: "Partidos", diagnostico: "Diagnóstico equipo", series: "Resumen por serie", profesores: "Profesores", caja: "Caja general" };
+  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", contenidos: "Contenidos", partidos: "Partidos", diagnostico: "Diagnóstico equipo", series: "Resumen por serie", profesores: "Profesores", caja: "Caja general" };
 
   return (
     <div>
@@ -131,6 +131,7 @@ function Dashboard({ user, role }) {
         {tab === "fichas" && <Fichas />}
         {tab === "convocatorias" && <Convocatorias />}
         {tab === "asistencia" && <Asistencia />}
+        {tab === "contenidos" && <Contenidos />}
         {tab === "partidos" && <Partidos />}
         {tab === "diagnostico" && <DiagnosticoEquipo />}
         {tab === "series" && <Series />}
@@ -341,6 +342,7 @@ function waLink(phone, msg) {
 function Convocatorias() {
   const [players, setPlayers] = useState([]);
   const [convs, setConvs] = useState([]);
+  const [planes, setPlanes] = useState([]);
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [lugar, setLugar] = useState("");
@@ -357,7 +359,10 @@ function Convocatorias() {
     const unsub2 = onSnapshot(collection(db, "convocatorias"), (snap) => {
       setConvs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsub1(); unsub2(); };
+    const unsub3 = onSnapshot(collection(db, "planesMensuales"), (snap) => {
+      setPlanes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub1(); unsub2(); unsub3(); };
   }, []);
 
   const catPlayers = players.filter((p) => p.categoria === categoria);
@@ -420,8 +425,18 @@ function Convocatorias() {
     .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
     .slice(0, 15);
 
+  const mesActual = `${MESES[new Date().getMonth()]} ${new Date().getFullYear()}`;
+  const planVigente = planes.find((p) => p.categoria === categoria && p.mes === mesActual) ||
+    planes.filter((p) => p.categoria === categoria).sort((a, b) => (a.mes < b.mes ? 1 : -1))[0];
+
   return (
     <div>
+      {planVigente && planVigente.contenidos && planVigente.contenidos.length > 0 && (
+        <div className="card" style={{ borderColor: "#93c5fd", background: "#eff6ff" }}>
+          <div style={{ fontWeight: 600 }}>📋 Contenidos del mes ({planVigente.mes}) — {categoria}</div>
+          <div className="muted">{planVigente.contenidos.join(" · ")}</div>
+        </div>
+      )}
       <div className="card">
         <div className="row">
           <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
@@ -501,6 +516,7 @@ function Asistencia() {
   const [players, setPlayers] = useState([]);
   const [sesiones, setSesiones] = useState([]);
   const [convs, setConvs] = useState([]);
+  const [planes, setPlanes] = useState([]);
   const [categoria, setCategoria] = useState(CATEGORIAS[0]);
   const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
   const [lugar, setLugar] = useState("");
@@ -522,7 +538,10 @@ function Asistencia() {
     const unsub3 = onSnapshot(collection(db, "convocatorias"), (snap) => {
       setConvs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsub1(); unsub2(); unsub3(); };
+    const unsub4 = onSnapshot(collection(db, "planesMensuales"), (snap) => {
+      setPlanes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
   }, []);
 
   // Si no estamos editando una sesión ya guardada, y existe una convocatoria
@@ -595,8 +614,18 @@ function Asistencia() {
     .sort((a, b) => (a.fecha < b.fecha ? 1 : -1))
     .slice(0, 15);
 
+  const mesActual = `${MESES[new Date().getMonth()]} ${new Date().getFullYear()}`;
+  const planVigente = planes.find((p) => p.categoria === categoria && p.mes === mesActual) ||
+    planes.filter((p) => p.categoria === categoria).sort((a, b) => (a.mes < b.mes ? 1 : -1))[0];
+
   return (
     <div>
+      {planVigente && planVigente.contenidos && planVigente.contenidos.length > 0 && (
+        <div className="card" style={{ borderColor: "#93c5fd", background: "#eff6ff" }}>
+          <div style={{ fontWeight: 600 }}>📋 Contenidos del mes ({planVigente.mes}) — {categoria}</div>
+          <div className="muted">{planVigente.contenidos.join(" · ")}</div>
+        </div>
+      )}
       <div className="card">
         {msg && <div className={msg.includes("Falta") ? "error" : "muted"}>{msg}</div>}
         <div className="row">
@@ -834,6 +863,138 @@ function Partidos() {
 
 const ETAPAS = ["EGO 0", "EGO I", "EGO II", "SUMA I", "SUMA II", "Colectiva 1", "Colectiva 2"];
 const FASES = ["Ofensiva", "Defensiva"];
+
+const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+function Contenidos() {
+  const [banco, setBanco] = useState([]);
+  const [planes, setPlanes] = useState([]);
+  const [bankEtapa, setBankEtapa] = useState(ETAPAS[1]);
+  const [bankGrupo, setBankGrupo] = useState("");
+  const [bankTexto, setBankTexto] = useState("");
+  const [categoria, setCategoria] = useState(CATEGORIAS[0]);
+  const [etapaPlan, setEtapaPlan] = useState(ETAPAS[1]);
+  const [mes, setMes] = useState(MESES[new Date().getMonth()] + " " + new Date().getFullYear());
+  const [seleccion, setSeleccion] = useState([]);
+
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db, "contenidosBanco"), (s) => setBanco(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u2 = onSnapshot(collection(db, "planesMensuales"), (s) => setPlanes(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return () => { u1(); u2(); };
+  }, []);
+
+  async function addBanco() {
+    if (!bankTexto.trim() || !bankGrupo.trim()) return;
+    await addDoc(collection(db, "contenidosBanco"), { etapa: bankEtapa, grupo: bankGrupo, contenido: bankTexto });
+    setBankTexto("");
+  }
+  async function removeBanco(id) { await deleteDoc(doc(db, "contenidosBanco", id)); }
+
+  const planKey = `${categoria}__${mes}`;
+  const planExistente = planes.find((p) => p.categoria === categoria && p.mes === mes);
+
+  useEffect(() => {
+    if (planExistente) {
+      setSeleccion(planExistente.contenidos || []);
+      setEtapaPlan(planExistente.etapa || ETAPAS[1]);
+    } else {
+      setSeleccion([]);
+    }
+    // eslint-disable-next-line
+  }, [planKey, planes]);
+
+  function toggleSeleccion(texto) {
+    setSeleccion((prev) => (prev.includes(texto) ? prev.filter((x) => x !== texto) : [...prev, texto]));
+  }
+
+  async function guardarPlan() {
+    const datos = { categoria, mes, etapa: etapaPlan, contenidos: seleccion };
+    if (planExistente) {
+      await updateDoc(doc(db, "planesMensuales", planExistente.id), datos);
+    } else {
+      await addDoc(collection(db, "planesMensuales"), datos);
+    }
+  }
+
+  const itemsEtapa = banco.filter((b) => b.etapa === etapaPlan);
+  const grupos = [...new Set(itemsEtapa.map((b) => b.grupo))];
+
+  return (
+    <div>
+      <div className="card">
+        <div className="muted" style={{ marginBottom: 8 }}>
+          Banco de contenidos: agrupa los contenidos según la etapa ludológica y el grupo al que pertenecen (ej. "Técnica individual", "Táctica defensiva")
+        </div>
+        <div className="row">
+          <select value={bankEtapa} onChange={(e) => setBankEtapa(e.target.value)}>
+            {ETAPAS.map((e) => <option key={e}>{e}</option>)}
+          </select>
+          <input placeholder="Grupo (ej. Técnica individual)" value={bankGrupo} onChange={(e) => setBankGrupo(e.target.value)} />
+          <input placeholder="Contenido (ej. Conducción)" value={bankTexto} onChange={(e) => setBankTexto(e.target.value)} />
+          <button className="primary" onClick={addBanco}>Agregar al banco</button>
+        </div>
+        <div style={{ marginTop: 10, maxHeight: 200, overflowY: "auto" }}>
+          {banco.length === 0 && <div className="muted">Banco vacío — agrega tus contenidos arriba.</div>}
+          {ETAPAS.map((et) => {
+            const items = banco.filter((b) => b.etapa === et);
+            if (items.length === 0) return null;
+            return (
+              <div key={et} style={{ marginBottom: 8 }}>
+                <b className="muted">{et}</b>
+                {items.map((b) => (
+                  <div key={b.id} className="muted" style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
+                    <span>[{b.grupo}] {b.contenido}</span>
+                    <button className="secondary" onClick={() => removeBanco(b.id)}>Quitar</button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="row">
+          <select value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+            {CATEGORIAS.map((c) => <option key={c}>{c}</option>)}
+          </select>
+          <select value={mes} onChange={(e) => setMes(e.target.value)}>
+            {MESES.map((m) => {
+              const label = `${m} ${new Date().getFullYear()}`;
+              return <option key={label} value={label}>{label}</option>;
+            })}
+          </select>
+          <select value={etapaPlan} onChange={(e) => setEtapaPlan(e.target.value)}>
+            {ETAPAS.map((e) => <option key={e}>{e}</option>)}
+          </select>
+        </div>
+        <div className="muted" style={{ margin: "10px 0" }}>
+          Elige los contenidos a trabajar este mes con {categoria} (mostrando el banco de {etapaPlan}):
+        </div>
+        {grupos.length === 0 && <div className="muted">No hay contenidos cargados en el banco para esta etapa.</div>}
+        {grupos.map((g) => (
+          <div key={g} style={{ marginBottom: 10 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{g}</div>
+            {itemsEtapa.filter((b) => b.grupo === g).map((b) => (
+              <label key={b.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+                <input type="checkbox" checked={seleccion.includes(b.contenido)} onChange={() => toggleSeleccion(b.contenido)} />
+                {b.contenido}
+              </label>
+            ))}
+          </div>
+        ))}
+        <button className="primary" onClick={guardarPlan}>Guardar plan del mes</button>
+      </div>
+
+      {planExistente && seleccion.length > 0 && (
+        <div className="card" style={{ borderColor: "#93c5fd", background: "#eff6ff" }}>
+          <div style={{ fontWeight: 600 }}>📋 Plan vigente — {categoria} — {mes}</div>
+          <div className="muted">{seleccion.join(" · ")}</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DiagnosticoEquipo() {
   const [descs, setDescs] = useState([]);
