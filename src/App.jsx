@@ -22,9 +22,9 @@ const CATEGORIAS = ["Sub-6", "Sub-8", "Sub-10", "Sub-12", "Sub-14", "Sub-16", "S
 // Roles que existen: "admin", "tesorera", "profesor", "sin-rol"
 // Qué pestañas ve cada rol:
 const TABS_BY_ROLE = {
-  admin: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "diagnostico", "series", "profesores", "caja"],
-  tesorera: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "diagnostico", "series", "profesores", "caja"],
-  profesor: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "diagnostico", "series"],
+  admin: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "evaluacion", "diagnostico", "series", "profesores", "caja"],
+  tesorera: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "evaluacion", "diagnostico", "series", "profesores", "caja"],
+  profesor: ["fichas", "convocatorias", "asistencia", "contenidos", "partidos", "evaluacion", "diagnostico", "series"],
   "sin-rol": [],
 };
 
@@ -114,7 +114,7 @@ function Login() {
 function Dashboard({ user, role }) {
   const tabsDisponibles = TABS_BY_ROLE[role] || [];
   const [tab, setTab] = useState(tabsDisponibles[0] || "fichas");
-  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", contenidos: "Contenidos", partidos: "Partidos", diagnostico: "Diagnóstico equipo", series: "Resumen por serie", profesores: "Profesores", caja: "Caja general" };
+  const labels = { fichas: "Fichas", convocatorias: "Convocatorias", asistencia: "Asistencia", contenidos: "Contenidos", partidos: "Partidos", evaluacion: "Evaluación", diagnostico: "Diagnóstico equipo", series: "Resumen por serie", profesores: "Profesores", caja: "Caja general" };
 
   return (
     <div>
@@ -133,6 +133,7 @@ function Dashboard({ user, role }) {
         {tab === "asistencia" && <Asistencia />}
         {tab === "contenidos" && <Contenidos />}
         {tab === "partidos" && <Partidos />}
+        {tab === "evaluacion" && <EvaluacionIndividual />}
         {tab === "diagnostico" && <DiagnosticoEquipo />}
         {tab === "series" && <Series />}
         {tab === "profesores" && <Profesores />}
@@ -865,6 +866,174 @@ const ETAPAS = ["EGO 0", "EGO I", "EGO II", "SUMA I", "SUMA II", "Colectiva 1", 
 const FASES = ["Ofensiva", "Defensiva"];
 
 const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+function EvaluacionIndividual() {
+  const [players, setPlayers] = useState([]);
+  const [banco, setBanco] = useState([]);
+  const [sesiones, setSesiones] = useState([]);
+  const [partidos, setPartidos] = useState([]);
+  const [evaluaciones, setEvaluaciones] = useState([]);
+  const [playerId, setPlayerId] = useState("");
+  const [periodo, setPeriodo] = useState("");
+  const [etapa, setEtapa] = useState(ETAPAS[1]);
+  const [valores, setValores] = useState({});
+  const [comentario, setComentario] = useState("");
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db, "jugadoras"), (s) => setPlayers(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u2 = onSnapshot(collection(db, "contenidosBanco"), (s) => setBanco(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u3 = onSnapshot(collection(db, "asistencia"), (s) => setSesiones(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u4 = onSnapshot(collection(db, "partidos"), (s) => setPartidos(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    const u5 = onSnapshot(collection(db, "evaluacionesIndividuales"), (s) => setEvaluaciones(s.docs.map((d) => ({ id: d.id, ...d.data() }))));
+    return () => { u1(); u2(); u3(); u4(); u5(); };
+  }, []);
+
+  const player = players.find((p) => p.id === playerId);
+
+  useEffect(() => {
+    if (player) setEtapa(CATEGORIA_ETAPA_DEFAULT[player.categoria] || ETAPAS[1]);
+    setValores({});
+    // eslint-disable-next-line
+  }, [playerId]);
+
+  const itemsEtapa = banco.filter((b) => b.etapa === etapa);
+  const grupos = [...new Set(itemsEtapa.map((b) => b.grupo))];
+
+  function setValor(contenido, val) {
+    setValores((prev) => ({ ...prev, [contenido]: val }));
+  }
+
+  // Estadísticas reales de asistencia para esta jugadora, en su categoría
+  let statsAsistencia = { presentes: 0, total: 0 };
+  if (player) {
+    const sesionesCat = sesiones.filter((s) => s.categoria === player.categoria);
+    statsAsistencia.total = sesionesCat.length;
+    statsAsistencia.presentes = sesionesCat.filter((s) => (s.presentes || []).includes(player.id)).length;
+  }
+  const pctAsistencia = statsAsistencia.total ? Math.round((statsAsistencia.presentes / statsAsistencia.total) * 100) : 0;
+
+  // Estadísticas de partido
+  let statsPartido = { jugados: 0, goles: 0, asistencias: 0 };
+  if (player) {
+    partidos.forEach((p) => {
+      const d = (p.jugadoras || {})[player.id];
+      if (d && d.jugo) {
+        statsPartido.jugados++;
+        statsPartido.goles += Number(d.goles) || 0;
+        statsPartido.asistencias += Number(d.asistencias) || 0;
+      }
+    });
+  }
+
+  async function guardar() {
+    if (!playerId || !periodo.trim()) { setMsg("Falta elegir jugadora o escribir el período."); return; }
+    setMsg("");
+    await addDoc(collection(db, "evaluacionesIndividuales"), {
+      playerId, periodo, etapa, valores, comentario,
+      asistenciaPct: pctAsistencia,
+      partidoStats: statsPartido,
+      fecha: new Date().toISOString().slice(0, 10),
+    });
+    setPeriodo(""); setValores({}); setComentario("");
+  }
+  async function eliminar(id) { await deleteDoc(doc(db, "evaluacionesIndividuales", id)); }
+
+  const historial = evaluaciones.filter((e) => e.playerId === playerId).sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+
+  function reportLink(ev) {
+    if (!player) return null;
+    const wa = (player.apoderadoTelefono || "").replace(/[^0-9]/g, "");
+    if (!wa) return null;
+    const detalle = Object.entries(ev.valores || {}).map(([k, v]) => `${k}: ${v}`).join(" · ");
+    const msgTxt = `Hola${player.apoderadoNombre ? " " + player.apoderadoNombre : ""}, esta es la evaluación de ${player.nombre} (${ev.periodo}): ${detalle}. Asistencia: ${ev.asistenciaPct}%. ${ev.comentario ? "Comentario: " + ev.comentario : ""} — Academia Curanipe`;
+    return `https://wa.me/${wa}?text=${encodeURIComponent(msgTxt)}`;
+  }
+
+  return (
+    <div>
+      <div className="card">
+        {msg && <div className="error">{msg}</div>}
+        <div className="row">
+          <select value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
+            <option value="">Jugadora...</option>
+            {players.map((p) => <option key={p.id} value={p.id}>{p.nombre} {p.apellido} ({p.categoria})</option>)}
+          </select>
+          <input placeholder="Período (ej. 1er Trimestre 2026)" value={periodo} onChange={(e) => setPeriodo(e.target.value)} />
+          <select value={etapa} onChange={(e) => setEtapa(e.target.value)}>
+            {ETAPAS.map((et) => <option key={et}>{et}</option>)}
+          </select>
+        </div>
+
+        {player && (
+          <div className="row" style={{ marginTop: 10 }}>
+            <div className="card" style={{ flex: 1, minWidth: 120, marginBottom: 0 }}>
+              <div className="muted">Asistencia</div>
+              <div style={{ fontWeight: "bold" }}>{pctAsistencia}% ({statsAsistencia.presentes}/{statsAsistencia.total})</div>
+            </div>
+            <div className="card" style={{ flex: 1, minWidth: 120, marginBottom: 0 }}>
+              <div className="muted">Partidos jugados</div>
+              <div style={{ fontWeight: "bold" }}>{statsPartido.jugados}</div>
+            </div>
+            <div className="card" style={{ flex: 1, minWidth: 120, marginBottom: 0 }}>
+              <div className="muted">Goles</div>
+              <div style={{ fontWeight: "bold" }}>{statsPartido.goles}</div>
+            </div>
+            <div className="card" style={{ flex: 1, minWidth: 120, marginBottom: 0 }}>
+              <div className="muted">Asistencias (pases gol)</div>
+              <div style={{ fontWeight: "bold" }}>{statsPartido.asistencias}</div>
+            </div>
+          </div>
+        )}
+
+        {grupos.length === 0 && <div className="muted" style={{ marginTop: 10 }}>No hay contenidos en el banco para esta etapa (cárgalos en la pestaña Contenidos).</div>}
+        {grupos.map((g) => (
+          <div key={g} style={{ marginTop: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{g}</div>
+            {itemsEtapa.filter((b) => b.grupo === g).map((b) => (
+              <div key={b.id} className="row" style={{ marginBottom: 4 }}>
+                <div style={{ minWidth: 160 }}>{b.contenido}</div>
+                <select value={valores[b.contenido] || ""} onChange={(e) => setValor(b.contenido, e.target.value)}>
+                  <option value="">Sin evaluar</option>
+                  <option>Inicial</option>
+                  <option>En desarrollo</option>
+                  <option>Adecuado</option>
+                  <option>Destacado</option>
+                  <option>Sobresaliente</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <textarea placeholder="Evaluación general / comportamental (apreciación abierta del profesor)" value={comentario} onChange={(e) => setComentario(e.target.value)} style={{ width: "100%", marginTop: 10 }} rows={3} />
+        <button className="primary" style={{ marginTop: 10 }} onClick={guardar}>Guardar evaluación</button>
+      </div>
+
+      {player && (
+        <div className="card">
+          <div className="muted" style={{ marginBottom: 8 }}>Evaluaciones anteriores de {player.nombre}</div>
+          {historial.length === 0 && <div className="muted">Sin evaluaciones registradas.</div>}
+          {historial.map((ev) => {
+            const link = reportLink(ev);
+            return (
+              <div key={ev.id} className="list-item">
+                <div>
+                  <b>{ev.periodo}</b> — {ev.fecha} ({ev.etapa}) · Asistencia {ev.asistenciaPct}% · {ev.partidoStats?.goles || 0} goles
+                  {ev.comentario && <div className="muted">"{ev.comentario}"</div>}
+                </div>
+                <div>
+                  {link && <a href={link} target="_blank" rel="noopener noreferrer" className="secondary" style={{ textDecoration: "none", display: "inline-block", marginRight: 6 }}>Enviar WhatsApp</a>}
+                  <button className="secondary" onClick={() => eliminar(ev.id)}>Eliminar</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Contenidos() {
   const [banco, setBanco] = useState([]);
